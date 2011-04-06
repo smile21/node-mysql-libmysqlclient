@@ -13,6 +13,11 @@
 var binding = require("./mysql_bindings");
 
 /**
+ * Function that do nothing
+ */
+function noop() {};
+
+/**
  * Create connection to database
  *
  * @param {String|null} hostname
@@ -28,5 +33,11 @@ exports.createConnectionSync = function () {
   if (arguments.length > 0) {
     db.connectSync.apply(db, Array.prototype.slice.call(arguments, 0, 6));
   }
+  
+  var native_query = db.query;
+  db.query = function (query, callback) {
+    native_query.call(db, query, callback || noop);
+  };
+  
   return db;
 };

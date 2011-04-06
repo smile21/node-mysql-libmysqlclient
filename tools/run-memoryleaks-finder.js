@@ -10,13 +10,15 @@ var
 // Require modules
   sys = require("sys"),
   stdin,
+  stdout,
   readline = require('readline'),
   rli,
   node_gc,
   gc,
   mysql_libmysqlclient = require("../mysql-libmysqlclient"),
   mysql_bindings = require("../mysql_bindings"),
-  cfg = require("../tests/config").cfg,
+  cfg = require("../tests/config"),
+  connGlobal = mysql_libmysqlclient.createConnectionSync(cfg.host, cfg.user, cfg.password, cfg.database),
 // Params
   prompt = "mlf> ",
   commands,
@@ -25,7 +27,7 @@ var
 
 function show_memory_usage_line(title, value0, value1) {
   if (value1) {
-    stdin.write(title + ": " + value1 + (value1 > value0 ? " (+" : " (") + (100 * (value1 - value0) / value0).toFixed(2) + "%)\n");
+    stdout.write(title + ": " + value1 + (value1 > value0 ? " (+" : " (") + (100 * (value1 - value0) / value0).toFixed(2) + "%)\n");
   } else {
     sys.puts(title + ": " + value0 + "\n");
   }
@@ -42,7 +44,7 @@ function show_memory_usage() {
   } else {
     var mu = process.memoryUsage();
     
-    stdin.write("Currect memory usage:\n");
+    stdout.write("Currect memory usage:\n");
     show_memory_usage_line("rss", initial_mu.rss, mu.rss);
     show_memory_usage_line("vsize", initial_mu.vsize, mu.vsize);
     show_memory_usage_line("heapUsed", initial_mu.heapUsed, mu.heapUsed);
@@ -61,10 +63,10 @@ commands = {
   },
   help: function () {
     var cmd;
-    stdin.write("List of commands:\n");
+    stdout.write("List of commands:\n");
     for (cmd in commands) {
       if (commands.hasOwnProperty(cmd)) {
-        stdin.write(cmd + "\n");
+        stdout.write(cmd + "\n");
       }
     }
   },
@@ -120,7 +122,6 @@ commands = {
     
     while ((row = res.fetchArraySync())) {
       // Empty block
-      sys.print('');
     }
     
     conn.closeSync();
@@ -136,11 +137,25 @@ commands = {
     
     while ((row = res.fetchArraySync())) {
       // Empty block
-      sys.print('');
     }
     
     res.freeSync();
     conn.closeSync();
+  },
+  without_callback: function () {
+    /***
+    CREATE TABLE IF NOT EXISTS `stats` (
+      `timestamp` int(11) NOT NULL,
+      `ip` int(10) unsigned NOT NULL,
+      `url` varchar(255) COLLATE utf8_unicode_ci NOT NULL
+    ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+    ***/
+    
+    try {
+      connGlobal.query("INSERT INTO stats(timestamp, ip, url) VALUES (UNIX_TIMESTAMP(), INET_ATON('127.0.0.1'), 'https://github.com/Sannis/node-mysql-libmysqlclient/');");
+    } catch (e) {
+      //stdout.write(e);
+    }
   },
   escape: function () {
     var
@@ -157,21 +172,28 @@ commands = {
 
 try {
   node_gc = require("gc");
+  gc = new node_gc.GC();
 } catch (e) {
-  sys.puts("\u001b[31mNode-GC doesn't exists or doesn't builded.\u001b[39m\n");
-  process.exit(1);
+  node_gc = null;
+  gc = {
+    'collect': function() {
+      console.log("ERROR: Node-GC doesn't exists or doesn't builded.");
+    }
+  };
 }
-
-gc = new node_gc.GC();
 
 sys.puts("Welcome to the memory leaks finder!");
 sys.puts("Type 'help' for options.");
 gc.collect();
 show_memory_usage();
 
-stdin = process.openStdin();
-rli = readline.createInterface(stdin, function (text) {
-  //return complete(text);
+process.stdin.resume();
+process.stdin.setEncoding('utf8');
+
+stdin = process.stdin;
+stdout = process.stdout;
+
+rli = readline.createInterface(stdin, stdout, function (text) {
   var
     completions = [],
     completeOn,
@@ -210,21 +232,18 @@ rli.addListener('line', function (cmd) {
         commands[pair[0]].apply();
       }
     } catch (e) {
-      stdin.write("Exception caused!\n");
-      stdin.write(sys.inspect(e.stack) + "\n");
+      stdout.write("Exception caused!\n");
+      stdout.write(sys.inspect(e.stack) + "\n");
     }
     if (pair[0] !== "help") {
       show_memory_usage();
     }
   } else if (pair[0] !== "") {
-    stdin.write("Unrecognized command: " + pair[0] + "\n");
+    stdout.write("Unrecognized command: " + pair[0] + "\n");
     commands.help();
   }
 
   rli.prompt();
-});
-stdin.addListener("data", function (chunk) {
-  rli.write(chunk);
 });
 rli.setPrompt(prompt);
 rli.prompt();

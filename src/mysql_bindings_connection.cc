@@ -446,6 +446,7 @@ int MysqlConnection::EIO_After_Connect(eio_req *req) {
     }
 
     conn_req->callback.Dispose();
+
     conn_req->conn->Unref();
     free(conn_req);
 
@@ -1069,18 +1070,15 @@ int MysqlConnection::EIO_After_Query(eio_req *req) {
         argv[0] = Local<Value>::New(Null());
     }
 
-    if (query_req->callback->IsFunction()) {
-        TryCatch try_catch;
+    TryCatch try_catch;
 
-        Persistent<Function>::Cast(query_req->callback)->
-                              Call(Context::GetCurrent()->Global(), argc, argv);
+    query_req->callback->Call(Context::GetCurrent()->Global(), argc, argv);
 
-        if (try_catch.HasCaught()) {
-            node::FatalException(try_catch);
-        }
-
-        query_req->callback.Dispose();
+    if (try_catch.HasCaught()) {
+        node::FatalException(try_catch);
     }
+
+    query_req->callback.Dispose();
 
     query_req->conn->Unref();
 
@@ -1152,7 +1150,7 @@ Handle<Value> MysqlConnection::Query(const Arguments& args) {
     return THREXC(MYSQL_NON_THREADSAFE_ERRORSTRING);
 #else
     REQ_STR_ARG(0, query);
-    OPTIONAL_FUN_ARG(1, callback);
+    REQ_FUN_ARG(1, callback);
 
     MysqlConnection *conn = OBJUNWRAP<MysqlConnection>(args.This());
 
@@ -1175,7 +1173,8 @@ Handle<Value> MysqlConnection::Query(const Arguments& args) {
         return THREXC("Snprintf() error");
     }
 
-    query_req->callback = Persistent<Value>::New(callback);
+    query_req->callback = Persistent<Function>::New(callback);
+
     query_req->conn = conn;
 
     eio_custom(EIO_Query, EIO_PRI_DEFAULT, EIO_After_Query, query_req);

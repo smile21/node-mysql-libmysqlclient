@@ -461,6 +461,7 @@ int MysqlResult::EIO_After_FetchAll(eio_req *req) {
     }
 
     fetchAll_req->callback.Dispose();
+
     fetchAll_req->res->Unref();
 
     // free the result object after callback

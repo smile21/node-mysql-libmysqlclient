@@ -65,14 +65,6 @@ return ThrowException(Exception::TypeError( \
 String::New("Argument " #I " must be a function"))); \
 Local<Function> VAR = Local<Function>::Cast(args[I]);
 
-#define OPTIONAL_FUN_ARG(I, VAR) \
-Handle<Value> VAR; \
-if (args.Length() > (I) && args[I]->IsFunction()) {\
-    VAR = args[I]; \
-} else { \
-    VAR = Null(); \
-}
-
 #define MYSQL_NON_THREADSAFE_ERRORSTRING \
     "Asynchronous functions works only with threadsafe libmysqlclient_r"
 
